@@ -5,6 +5,8 @@ import importlib
 import re
 import time
 import base64
+import os
+import json
 
 
 # ---------- Page configuration ----------
@@ -45,6 +47,10 @@ def apply_css(hide_sidebar=True):
             unsafe_allow_html=True
         )
 
+if not os.path.exists("service_account.json"):
+    if "google_sheets_credentials" in st.secrets:
+        with open("service_account.json", "w") as f:
+            f.write(st.secrets["google_sheets_credentials"])
 # ---------- Login form (main screen) ----------
 def show_login_form():
     # ==========================================
