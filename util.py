@@ -99,19 +99,19 @@ def get_client():
 # ----- Master Data Load කරන්න -----
 def load_master_data():
     """Master Data Load කරන්න - දැන් connect_to_sheets2() භාවිතා කරයි"""
-    sh = connect_to_sheets2()  # <--- මෙතනදී connect_to_sheets2() දාන්න
+    sh = connect_to_sheets2()  # <--- Use connect_to_sheets2() here
     try:
         ws = sh.worksheet("MasterData")
         records = ws.cached_get_all_records(ws)
         return records
     except gspread.exceptions.WorksheetNotFound:
-        # MasterData නැතිනම් හදාගෙන හිස් ලිස්ට් එකක් දෙන්න
+        # If the worksheet doesn't exist, create it with headers
         ws = sh.add_worksheet(title="MasterData", rows=500, cols=20)
         ws.append_row(["No", "Manager", "Route", "Representative", "Status"])
         return []
     
 def load_targets_for_month(month):
-    """Specific මාසයක Target data Load කරන්න"""
+    """Load targets for a specific month from the "MonthlyTargets" worksheet."""
     sh = connect_to_sheets2()
     try:
         ws = sh.worksheet("MonthlyTargets")
@@ -127,33 +127,33 @@ def load_targets_for_month(month):
         return pd.DataFrame()
     
 
-# ----- Master Data Update කරන්න (Settings වලින්) -----
+# ----- Update Master Data (via Settings) -----
 def update_master_data(df):
     client = get_client()
     sheet = client.open("Sales data2").worksheet("MasterData")
     
-    # පැරණි දත්ත මකන්න (Header එක හැර)
+    # Delete existing data (except the header).
     all_rows = sheet.get_all_values()
     if len(all_rows) > 1:
         sheet.delete_rows(2, len(all_rows))
     
-    # හෙඩර් එක නැවත ලියන්න (DataFrame එකේ තියෙන Columns)
+    # Rewrite the header (using the DataFrame columns).
     headers = df.columns.tolist()
-    if not sheet.get_all_values():  # හිස් නම් header දාන්න
+    if not sheet.get_all_values():  # If the sheet is empty, add headers
         sheet.append_row(headers)
     
-    # අලුත් දත්ත rows විදියට දාන්න
+    # Append new rows from the DataFrame.
     for _, row in df.iterrows():
         sheet.append_row(row.tolist())
-    clear_sheet_cache()  # 📌 අලුතින් එකතු කළ පේළිය
+    clear_sheet_cache()  # Clear cache after updating the sheet
     return True
 
-# ----- Monthly Targets Save කරන්න (මාසය අනුව) -----
+# ----- Save Monthly Targets -----
 def save_monthly_data(month, data_list):
     client = get_client()
     sheet = client.open("Sales data2").worksheet("MonthlyTargets")
     
-    # 1. ඒ මාසයට අදාළ පැරණි පේළි හොයා මකන්න (අනිත් මාස වලට හානි නොවෙන්න)
+    # 1. Find and delete the existing rows for that month only (without affecting data from other months).
     all_values = sheet.get_all_values()
     rows_to_delete = []
     if len(all_values) > 1:  # Header එක හැර
@@ -163,11 +163,11 @@ def save_monthly_data(month, data_list):
             if len(row) > 0 and row[0] == month:
                 rows_to_delete.append(idx)
     
-    # පහළින් ඉඳලා මකන්න (ඉහළින් මැකුවොත් index මාරු වෙන නිසා)
+    # Delete from bottom to top to avoid index shifting
     for idx in sorted(rows_to_delete, reverse=True):
         sheet.delete_rows(idx)
     
-    # 2. අලුත් දත්ත එකතු කරන්න
+    # 2. Append new data for that month
     for row in data_list:
         new_row = [
             month,
@@ -193,31 +193,31 @@ def save_monthly_data(month, data_list):
     """
     Save monthly targets to the same Google Sheet used by connect_to_sheets().
     """
-    # මෙතනදී get_client() වෙනුවට connect_to_sheets() භාවිතා කරන්න
+    # Use connect_to_sheets() instead of get_client() here.
     sh = connect_to_sheets2()
     
-    # MonthlyTargets Tab එක හොයන්න, නැතිනම් හදාගන්න
+    # Check if the "MonthlyTargets" worksheet exists; if not, create it with headers.
     try:
         ws = sh.worksheet("MonthlyTargets")
     except gspread.exceptions.WorksheetNotFound:
         ws = sh.add_worksheet(title="MonthlyTargets", rows=1000, cols=20)
         ws.append_row(["Month", "No", "Manager", "Route", "Representative", "Status", "Target"])
     
-    # ඒ මාසයට අදාළ පැරණි දත්ත මකන්න (Duplicate නොවෙන්න)
+    # Delete existing rows for the specified month (without affecting other months).
     all_values = ws.get_all_values()
     rows_to_delete = []
     if len(all_values) > 1:
         for idx, row in enumerate(all_values, start=1):
             if idx == 1:
-                continue  # Header එක පැත්තකින් තියන්න
+                continue  # Skip the header row
             if len(row) > 0 and row[0] == month:
                 rows_to_delete.append(idx)
     
-    # පහළින් ඉඳලා මකන්න (index මාරු නොවෙන්න)
+    # Delete from bottom to top to avoid index shifting
     for idx in sorted(rows_to_delete, reverse=True):
         ws.delete_rows(idx)
     
-    # අලුත් දත්ත එකතු කරන්න
+    # Append new data for that month
     for row in data_list:
         new_row = [
             month,

@@ -49,41 +49,68 @@ def apply_css(hide_sidebar=True):
 
 if not os.path.exists("service_account.json"):
     try:
-        # ක්‍රමය 1: google_sheets_credentials නමින් දත්ත දී ඇත්නම්
+        # If the google_sheets are in credentials name, then write it to a file
         if "google_sheets_credentials" in st.secrets:
             with open("service_account.json", "w") as f:
                 f.write(st.secrets["google_sheets_credentials"])
         
-        # ක්‍රමය 2: කෙලින්ම JSON එකම Secrets වලට Paste කරලා නම්
+        # Method 2: If the credentials are directly pasted as a JSON in Secrets
         elif "type" in st.secrets and st.secrets["type"] == "service_account":
             with open("service_account.json", "w") as f:
                 json.dump(dict(st.secrets), f)
                 
         else:
-            st.error("⚠️ Streamlit Secrets වල 'service_account.json' දත්ත සොයාගැනීමට නොහැක! කරුණාකර Streamlit Cloud හි Settings -> Secrets වලට ගොස් දත්ත ලබාදෙන්න.")
-            st.stop() # දත්ත නැතිව ඉදිරියට යාම නවතයි (App එක Crash වීම වළක්වයි)
+            st.error("⚠️ Google Sheets credentials not found in Streamlit secrets. Please add them to the secrets.toml file.")
+            st.stop() # Stop the app if the credentials are not found
             
     except Exception as e:
-        st.error(f"⚠️ Secrets කියවීමේදී දෝෂයක්: {e}")
+        st.error(f"⚠️ Error reading secrets: {e}")
         st.stop()
 # ---------- Login form (main screen) ----------
 def show_login_form():
+    
+    def get_base64_file(file_path):
+        try:
+            with open(file_path, "rb") as f:
+                return base64.b64encode(f.read()).decode()
+        except Exception as e:
+            return ""
+
+    # Load logo and video files as base64
+    logo_path = "logo.png"
+    logo_base64 = get_base64_file(logo_path)
+
+    video_path = "Sales_meeting_video_with_graphs_202608011540.mp4" 
+    video_base64 = get_base64_file(video_path)
+
     # ==========================================
     # 🎨 CSS FOR MINIMAL LOGIN & ANIMATIONS
     # ==========================================
-    st.markdown("""
+    css_code = """
         <style>
         /* 1. Hide the Sidebar completely on Login Page */
         [data-testid="stSidebar"] { display: none !important; }
         [data-testid="stSidebarCollapsedControl"] { display: none !important; }
         [data-testid="stHeader"] { display: none !important; }
         
-        /* 2. Background Settings (Transparent Overlay + Image) */
+        /* 2. Video Background Settings */
+        [data-testid="stAppViewContainer"] {
+            background-color: transparent !important;
+        }
         .stApp {
-            background: 
-                linear-gradient(rgba(5, 43, 108, 0.9), rgba(5, 43, 108, 0.5)),
-                url("https://images.pexels.com/photos/7433848/pexels-photo-7433848.jpeg") center/cover no-repeat !important;
-            background-blend-mode: lighten !important;
+            /* Video Background */
+            background: linear-gradient(rgba(110,127,128,0.3), rgba(110,127,128,0.3)) !important;
+        }
+        
+        /* send the video to the background */
+        #bg-video {
+            position: fixed;
+            right: 0;
+            bottom: 0;
+            min-width: 100vw;
+            min-height: 100vh;
+            z-index: -1;
+            object-fit: cover;
         }
 
         /* 3. Minimal Glassmorphism Form Styling */
@@ -93,7 +120,7 @@ def show_login_form():
             border-radius: 3% !important;
             border: 1px solid rgba(255, 255, 255, 0.3) !important;
             width: 500px;
-            margin-left:75px;
+            margin-left: 75px;
             padding: 40px 40px !important;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.85) !important;
         }
@@ -230,33 +257,34 @@ def show_login_form():
             50% { transform: scale3d(1.1, 1.1, 1); }
         }
         </style>
-    """, unsafe_allow_html=True)
+    """
+    
+    video_html = f"""
+        <video autoplay muted loop playsinline id="bg-video">
+            <source src="data:video/mp4;base64,{video_base64}" type="video/mp4">
+        </video>
+    """
+    
+    st.markdown(css_code + video_html, unsafe_allow_html=True)
 
-    def get_base64_image(image_path):
-        with open(image_path, "rb") as img_file:
-            return base64.b64encode(img_file.read()).decode()
-
-    logo_path = "C:/Users/Asus/Desktop/Python/Sales departmet reports/Sales_App/logo.png"  # logo path
-    logo_base64 = get_base64_image(logo_path)
-
+    # Create a placeholder for the login form and animations
     login_placeholder = st.empty()
 
-    # 1. LOGIN FORM එක
+    # 1. Show the login form
     with login_placeholder.container():
-        st.markdown("<div style='margin-top: 12vh;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-top: 15vh;'></div>", unsafe_allow_html=True)
         col1, col2, col3 = st.columns([1, 1.2, 1])
         with col2:
             st.markdown(f"""
                 <div style='text-align: center; margin-bottom: 40px;'>
-                    <img src="data:image/png;base64,{logo_base64}" 
-                        style='width: 150px; height: 150px; object-fit: contain; '>
-                    <div style='margin-top: 15px;'>
+                    <img src="data:image/png;base64,{logo_base64}" style="width: 180px;">
+                <div style='margin-top: 35px;'>
                         <span style='background-color: #052b6c; 
                                     color: white; 
                                     padding: 8px 20px; 
                                     border-radius: 8px; 
                                     font-weight: 800; 
-                                    font-size: 24px;
+                                    font-size: 30px;
                                     display: inline-block;
                                     box-shadow: 0 4px 12px rgba(3, 4, 94, 0.4);'>
                             Imo Chicken & Agro (Pvt) Ltd
@@ -275,16 +303,16 @@ def show_login_form():
                 st.markdown("<br>", unsafe_allow_html=True)
                 login_btn = st.form_submit_button("Log in", use_container_width=True)
 
-    # 2. LOGIN BUTTON එක CLICK කළ විට
+    # 2. Login Button Clicked
     if login_btn:
-        # ඔබගේ Authentication Logic එක (මෙතැන authenticate() function එක Call වේ)
+        # Validate the credentials
         role = authenticate(username, password)
         
         if role:
-            # සාර්ථක වුවහොත් Form එක තියෙන Container එක හිස් කිරීම
+            # If credentials are valid, clear the login form and show access granted animation
             login_placeholder.empty()
             
-            # 3. ACCESS GRANTED ANIMATION එක පෙන්වීම
+            # 3. show "ACCESS GRANTED" animation
             with login_placeholder.container():
                 st.markdown("<div style='margin-top: 15vh;'></div>", unsafe_allow_html=True)
                 c1, c2, c3 = st.columns([1, 1.2, 1])
@@ -300,10 +328,10 @@ def show_login_form():
                         </div>
                     """, unsafe_allow_html=True)
             
-            # රවුම පිරෙන Animation එක අවසන් වන තුරු තත්පර 1.8 ක් රැඳී සිටීම
+            # wait for 1.8 seconds to let the animation play before rerunning the app
             time.sleep(1.8)
             
-            # Session State යාවත්කාලීන කර Dashboard එකට ඇතුළු වීම
+            # Set session state variables and rerun the app to show the main content
             st.session_state.logged_in = True
             st.session_state.username = username
             st.session_state.role = role
@@ -317,10 +345,10 @@ def show_login_form():
             st.rerun()
             
         else:
-            # වැරදි Username/Password දුන් විට Form එක මකා දැමීම
+            # If the credentials are invalid, clear the login form and show the access denied animation
             login_placeholder.empty()
             
-            # 4. ACCESS DENIED ANIMATION එක පෙන්වීම
+            # 4. show "ACCESS DENIED" animation
             with login_placeholder.container():
                 st.markdown("<div style='margin-top: 15vh;'></div>", unsafe_allow_html=True)
                 c1, c2, c3 = st.columns([1, 1.2, 1])
@@ -336,10 +364,10 @@ def show_login_form():
                         </div>
                     """, unsafe_allow_html=True)
             
-            # Animation එක දිස්වීමට තත්පර 2ක් රැඳී සිටීම
+            # Wait for 2 seconds to let the animation play
             time.sleep(2)
             
-            # නැවතත් Login Form එක පෙන්වීම සඳහා App එක Rerun කිරීම
+            # Rerun the app to show the login form again
             st.rerun()
 
 # ---------- Logout ----------
@@ -394,8 +422,9 @@ def main():
         [data-testid="stSidebar"] [data-testid="stImage"] {
             background: transparent !important;
             box-shadow: none !important;
-            padding: 0 !important;
-            margin-bottom: 5px;
+            padding: 10px !important;
+            margin-top: 10px;
+            margin-bottom: 20px;
         }
         
         [data-testid="stSidebar"] [data-testid="stImage"] img {
@@ -433,7 +462,7 @@ def main():
     col1, col2, col3 = st.sidebar.columns([1, 2.5, 1])
     with col2:
         try:
-            # logo.png කියන පින්තූරය main folder එකේ තියන්න
+            # If the logo.png file exists, display it in the sidebar
             st.image("logo.png", use_container_width=True)
         except Exception:
             pass
@@ -455,7 +484,6 @@ def main():
     else:
         page_options = allowed
     
-    # ... existing code ...
     if st.session_state.current_page not in page_options:
         st.session_state.current_page = page_options[0] if page_options else "Home"
         st.rerun()
@@ -463,7 +491,7 @@ def main():
     # Format the page name
     def format_page_name(name):
         if name == "Home":
-            return "KPI" # Home යන්න KPI ලෙස පෙන්වීම
+            return "KPI" # For Home page, display as "KPI"
         # clear the unusefull 
         clean_name = re.sub(r'^[\d_]+', '', name)
         return clean_name.replace("_", " ").title()
