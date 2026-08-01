@@ -48,9 +48,24 @@ def apply_css(hide_sidebar=True):
         )
 
 if not os.path.exists("service_account.json"):
-    if "google_sheets_credentials" in st.secrets:
-        with open("service_account.json", "w") as f:
-            f.write(st.secrets["google_sheets_credentials"])
+    try:
+        # ක්‍රමය 1: google_sheets_credentials නමින් දත්ත දී ඇත්නම්
+        if "google_sheets_credentials" in st.secrets:
+            with open("service_account.json", "w") as f:
+                f.write(st.secrets["google_sheets_credentials"])
+        
+        # ක්‍රමය 2: කෙලින්ම JSON එකම Secrets වලට Paste කරලා නම්
+        elif "type" in st.secrets and st.secrets["type"] == "service_account":
+            with open("service_account.json", "w") as f:
+                json.dump(dict(st.secrets), f)
+                
+        else:
+            st.error("⚠️ Streamlit Secrets වල 'service_account.json' දත්ත සොයාගැනීමට නොහැක! කරුණාකර Streamlit Cloud හි Settings -> Secrets වලට ගොස් දත්ත ලබාදෙන්න.")
+            st.stop() # දත්ත නැතිව ඉදිරියට යාම නවතයි (App එක Crash වීම වළක්වයි)
+            
+    except Exception as e:
+        st.error(f"⚠️ Secrets කියවීමේදී දෝෂයක්: {e}")
+        st.stop()
 # ---------- Login form (main screen) ----------
 def show_login_form():
     # ==========================================
