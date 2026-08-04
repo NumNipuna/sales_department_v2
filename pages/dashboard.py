@@ -1,9 +1,13 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.utils import PlotlyJSONEncoder
 from datetime import datetime
 import numpy as np
+import json
+import time
 
 try:
     from util import connect_to_sheets, connect_to_sheets2
@@ -65,13 +69,31 @@ def apply_custom_css():
             background: transparent !important;
         }
 
-        /* Hide Top Padding & Overflow fixes */
+        /* Page spacing and overflow fixes */
         .block-container {
-            padding-top: 0rem !important;
-            margin-top: -30px !important;
-            padding-bottom: 1rem !important;
+            padding-top: 1rem !important;
+            padding-bottom: 2rem !important;
             max-width: 98% !important;
             overflow-x: hidden !important;
+            min-height: 85vh !important;
+        }
+
+        div[data-testid="stDateInput"] label p {
+            font-family: 'Arial', sans-serif !important;
+            font-weight: 600 !important;
+            font-size: 16px !important;
+            color: var(--c-900) !important;
+        }
+        div[data-testid="stDateInput"] div[data-baseweb="input"] {
+            border: 2px solid var(--c-600) !important;
+            border-radius: 8px !important;
+            background-color: #F8FDFF !important;
+            transition: all 0.3s ease-in-out;
+            padding-left: 5px;
+        }
+        div[data-testid="stDateInput"] div[data-baseweb="input"]:focus-within {
+            border: 2px solid var(--c-900) !important;
+            box-shadow: 0 0 8px rgba(3, 4, 94, 0.4) !important;
         }
 
         /* 🚀 MASTER FIX: Complete Scrollbar Removal for Charts */
@@ -202,6 +224,7 @@ def apply_plotly_layout(fig, title=""):
         font_color="#023E8A",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         dragmode=False, # Disables mouse drag to zoom/pan
+        transition=dict(duration=700, easing="cubic-in-out"),
         margin=dict(t=60, b=40, l=15, r=15) # 🚀 Increased bottom margin to prevent scrollbars inside iframe
     )
     # fixedrange=True disables the internal scrolling of axes
@@ -216,6 +239,133 @@ plotly_config = {
     'staticPlot': False
 }
 
+def render_kpi_cards(total_sale, total_target, forecast_ach, active_reps):
+    """Animate the KPI values from zero to their final values."""
+    placeholder = st.empty()
+    steps = 20
+
+    for step in range(steps + 1):
+        progress = step / steps
+        placeholder.markdown(f"""
+            <div class="kpi-container">
+                <div class="kpi-card" style="border-top-color: #03045E;">
+                    <div class="kpi-title">Total Sales (Up to Today)</div>
+                    <div class="kpi-value"><span>{total_sale * progress:,.0f}</span></div>
+                    <div class="kpi-sub" style="color: #0096C7;">Total Volume Sold</div>
+                </div>
+                <div class="kpi-card" style="border-top-color: #023E8A;">
+                    <div class="kpi-title">Total Target</div>
+                    <div class="kpi-value"><span>{total_target * progress:,.0f}</span></div>
+                    <div class="kpi-sub" style="color: #0077B6;">Monthly Quota</div>
+                </div>
+                <div class="kpi-card" style="border-top-color: #0077B6;">
+                    <div class="kpi-title">Forecast Achievement</div>
+                    <div class="kpi-value"><span>{forecast_ach * progress:,.1f}%</span></div>
+                    <div class="kpi-sub" style="color: #0096C7;">Vs Projected Forecast</div>
+                </div>
+                <div class="kpi-card" style="border-top-color: #0096C7;">
+                    <div class="kpi-title">Active Reps</div>
+                    <div class="kpi-value"><span>{active_reps * progress:,.0f}</span></div>
+                    <div class="kpi-sub" style="color: #0077B6;">Engaged in Sales</div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        if step < steps:
+            time.sleep(0.025)
+
+def render_animated_chart(fig, height, animation_kind="default"):
+    """Render a Plotly chart without scrollbars and animate its first appearance."""
+    def as_list(values):
+        """Convert Plotly/Pandas/Numpy values to a list without boolean-testing arrays."""
+        return [] if values is None else list(values)
+
+    target = json.loads(fig.to_json())
+
+    # Plotly can serialize Pandas/Numpy values in a typed internal format.
+    # Convert animated axes to ordinary lists so Python and JavaScript can slice them safely.
+    for index, trace in enumerate(target.get("data", [])):
+        source_trace = fig.data[index]
+        for axis in ("x", "y", "values"):
+            source_values = getattr(source_trace, axis, None)
+            if source_values is not None:
+                trace[axis] = as_list(source_values)
+
+    initial = json.loads(json.dumps(target, cls=PlotlyJSONEncoder))
+
+    for index, trace in enumerate(initial.get("data", [])):
+        source_trace = fig.data[index]
+        trace_type = trace.get("type")
+        if trace_type == "indicator":
+            trace["value"] = 0
+        elif trace_type == "pie":
+            values = as_list(getattr(source_trace, "values", None))
+            trace["values"] = [1] * len(values)
+        elif trace_type == "bar":
+            value_axis = "x" if trace.get("orientation") == "h" else "y"
+            values = as_list(getattr(source_trace, value_axis, None))
+            trace[value_axis] = [0] * len(values)
+        elif trace_type == "scatter":
+            if animation_kind == "line":
+                for axis in ("x", "y"):
+                    values = as_list(getattr(source_trace, axis, None))
+                    if values:
+                        trace[axis] = values[:1]
+            elif "y" in trace:
+                values = as_list(getattr(source_trace, "y", None))
+                trace["y"] = [0] * len(values)
+
+    chart_html = f"""
+    <style>
+        html, body {{ margin: 0; padding: 0; overflow: hidden; background: transparent; }}
+        #animated-chart {{ width: 100%; height: {height}px; overflow: hidden; }}
+    </style>
+    <div id="animated-chart"></div>
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <script>
+        const chart = document.getElementById("animated-chart");
+        const initial = {json.dumps(initial, cls=PlotlyJSONEncoder)};
+        const target = {json.dumps(target, cls=PlotlyJSONEncoder)};
+        const config = {json.dumps(plotly_config)};
+
+        Plotly.newPlot(chart, initial.data, initial.layout, config).then(() => {{
+            if ("{animation_kind}" === "line") {{
+                const lineTrace = target.data.find(trace => trace.type === "scatter" && (trace.mode || "").includes("lines"));
+                const totalPoints = lineTrace && lineTrace.x ? lineTrace.x.length : 1;
+                const steps = Math.min(24, Math.max(1, totalPoints));
+                let currentStep = 0;
+                const timer = setInterval(() => {{
+                    currentStep += 1;
+                    const progress = currentStep / steps;
+                    const pointCount = Math.max(1, Math.ceil(totalPoints * progress));
+                    const frameData = target.data.map(trace => {{
+                        const nextTrace = JSON.parse(JSON.stringify(trace));
+                        if (nextTrace.type === "scatter" && (nextTrace.mode || "").includes("lines")) {{
+                            nextTrace.x = nextTrace.x.slice(0, pointCount);
+                            nextTrace.y = nextTrace.y.slice(0, pointCount);
+                        }} else if (nextTrace.type === "bar") {{
+                            const axis = nextTrace.orientation === "h" ? "x" : "y";
+                            nextTrace[axis] = nextTrace[axis].map(value => value * progress);
+                        }}
+                        return nextTrace;
+                    }});
+                    Plotly.react(chart, frameData, target.layout, config);
+                    if (currentStep >= steps) {{
+                        clearInterval(timer);
+                        Plotly.react(chart, target.data, target.layout, config);
+                    }}
+                }}, 45);
+            }} else {{
+                Plotly.animate(chart, {{data: target.data, layout: target.layout}}, {{
+                    transition: {{duration: 1100, easing: "cubic-in-out"}},
+                    frame: {{duration: 1100, redraw: true}},
+                    mode: "afterall"
+                }});
+            }}
+        }});
+    </script>
+    """
+    components.html(chart_html, height=height, scrolling=False)
+
 # STREAMING_CHUNK:Rendering Dashboard...
 def show():
     apply_custom_css()
@@ -226,11 +376,13 @@ def show():
     today = datetime.now()
     first_day = today.replace(day=1)
     
-    col1, col2, _ = st.columns([1, 1, 3])
+    col1, col2, _ = st.columns([2, 2, 3], vertical_alignment="bottom")
     with col1:
-        start_date = st.date_input("Start Date", value=first_day)
+        start_date = st.date_input("Start Date:", value=first_day)
     with col2:
-        end_date = st.date_input("End Date (Snapshot)", value=today)
+        end_date = st.date_input("End Date (Snapshot):", value=today)
+
+    st.divider()
 
     if start_date > end_date:
         st.error("Start Date cannot be after End Date.")
@@ -284,31 +436,7 @@ def show():
         
         active_reps = len(rep_df[rep_df["Sales"] > 0]) if "Sales" in rep_df.columns else 0
 
-        # Render Animated KPIs
-        st.markdown(f"""
-            <div class="kpi-container">
-                <div class="kpi-card" style="border-top-color: #03045E;">
-                    <div class="kpi-title">Total Sales (Up to Today)</div>
-                    <div class="kpi-value"><span>{total_sale:,.0f}</span></div>
-                    <div class="kpi-sub" style="color: #0096C7;">Total Volume Sold</div>
-                </div>
-                <div class="kpi-card" style="border-top-color: #023E8A;">
-                    <div class="kpi-title">Total Target</div>
-                    <div class="kpi-value"><span>{total_target:,.0f}</span></div>
-                    <div class="kpi-sub" style="color: #0077B6;">Monthly Quota</div>
-                </div>
-                <div class="kpi-card" style="border-top-color: #0077B6;">
-                    <div class="kpi-title">Forecast Achievement</div>
-                    <div class="kpi-value"><span>{forecast_ach:,.1f}%</span></div>
-                    <div class="kpi-sub" style="color: #0096C7;">Vs Projected Forecast</div>
-                </div>
-                <div class="kpi-card" style="border-top-color: #0096C7;">
-                    <div class="kpi-title">Active Reps</div>
-                    <div class="kpi-value"><span>{active_reps}</span></div>
-                    <div class="kpi-sub" style="color: #0077B6;">Engaged in Sales</div>
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
+        render_kpi_cards(total_sale, total_target, forecast_ach, active_reps)
 
         # STREAMING_CHUNK:Rendering Charts...
         # ================== ROW 1 ==================
@@ -396,86 +524,94 @@ def show():
             else:
                 st.info("Data not available for achievement chart.")
 
-        # ================== ROW 3 ==================
-        r3c1, r3c2 = st.columns([1, 1])
-
-        with r3c1:
-            # Channel / Status Performance
-            if "Status" in rep_df.columns:
-                channel_data = rep_df.groupby("Status")[["Sales", "Target"]].sum().reset_index()
-                
-                fig_ch = go.Figure()
-                fig_ch.add_trace(go.Bar(x=channel_data["Status"], y=channel_data["Sales"], name="Sales", marker_color="#0077B6"))
-                fig_ch.add_trace(go.Bar(x=channel_data["Status"], y=channel_data["Target"], name="Target", marker_color="#90E0EF"))
-                
-                fig_ch = apply_plotly_layout(fig_ch, "Channel Performance (Rep vs Dealer vs Horeca)")
-                fig_ch.update_layout(height=350, barmode='group', margin=dict(t=60, b=30, l=20, r=20))
-                st.plotly_chart(fig_ch, use_container_width=True, config=plotly_config)
-
-        with r3c2:
-            # Manager Performance
-            if "Manager" in rep_df.columns:
-                mgr_data = rep_df.groupby("Manager")[["Sales", "Target"]].sum().reset_index()
-                mgr_data["Manager"] = mgr_data["Manager"].str.replace("Mr.", "").str.strip()
-                
-                fig_mgr = go.Figure()
-                fig_mgr.add_trace(go.Bar(x=mgr_data["Manager"], y=mgr_data["Sales"], name="Sales", marker_color="#03045E"))
-                fig_mgr.add_trace(go.Bar(x=mgr_data["Manager"], y=mgr_data["Target"], name="Target", marker_color="#48CAE4"))
-                
-                fig_mgr = apply_plotly_layout(fig_mgr, "Manager Performance")
-                fig_mgr.update_layout(height=350, barmode='group', margin=dict(t=60, b=30, l=20, r=20))
-                st.plotly_chart(fig_mgr, use_container_width=True, config=plotly_config)
-
         # STREAMING_CHUNK:Rendering Bottom Table...
         # ================== ROW 4 ==================
         st.markdown("<h4 style='color: #03045E; margin-top: 1rem; font-weight: 800;'>👥 Manager vs Representative Hierarchy & Completion</h4>", unsafe_allow_html=True)
         
-        if "Sales" in rep_df.columns and "Target" in rep_df.columns:
+        required_columns = {"Manager", "Representative", "Sales", "Target"}
+        if required_columns.issubset(rep_df.columns):
             rep_clean = rep_df[(rep_df["Sales"] > 0) | (rep_df["Target"] > 0)].copy()
+
             if not rep_clean.empty:
-                rep_clean["Rep"] = rep_clean["Representative"].apply(lambda x: str(x).split()[0].title() if pd.notna(x) else "Unknown")
-                rep_clean["Manager_Clean"] = rep_clean["Manager"].str.replace("Mr.", "").str.strip()
-                rep_clean["Display_Name"] = rep_clean["Rep"] + " (" + rep_clean["Manager_Clean"] + ")"
-                
-                rep_grouped = rep_clean.groupby("Display_Name")[["Sales", "Target"]].sum().reset_index()
-                
-                tot_s = rep_grouped["Sales"].sum()
-                tot_t = rep_grouped["Target"].sum()
-                
-                total_row = pd.DataFrame([{"Display_Name": "Total", "Sales": tot_s, "Target": tot_t}])
-                rep_grouped = pd.concat([rep_grouped, total_row], ignore_index=True)
-                
-                rep_grouped["Ach %"] = np.where(rep_grouped["Target"] > 0, (rep_grouped["Sales"] / rep_grouped["Target"]) * 100, 0)
-                
-                rep_grouped["Sales"] = rep_grouped["Sales"].apply(lambda x: f"{x:,.0f}")
-                rep_grouped["Target"] = rep_grouped["Target"].apply(lambda x: f"{x:,.0f}")
-                rep_grouped["Ach %"] = rep_grouped["Ach %"].apply(lambda x: f"{x:.0f}%")
-                
-                rep_t = rep_grouped.set_index("Display_Name").T
-                cols = [c for c in rep_t.columns if c != "Total"] + ["Total"]
-                rep_t = rep_t[cols]
-                
-                def style_table(df):
-                    def color_cells(val, row_idx):
-                        if row_idx == "Sales": return "color: #0077B6; font-weight: 800; text-align: center; border-bottom: 1px solid #CAF0F8; background-color: rgba(255,255,255,0.7);"
-                        elif row_idx == "Target": return "color: #03045E; font-weight: 800; text-align: center; border-bottom: 1px solid #CAF0F8; background-color: rgba(255,255,255,0.7);"
-                        elif row_idx == "Ach %":
-                            try:
-                                num = float(str(val).replace('%', '').replace(',', ''))
-                                if num >= 95: return "background-color: #0077B6; color: #FFFFFF; font-weight: 800; text-align: center;"
-                                elif num >= 75: return "background-color: #48CAE4; color: #03045E; font-weight: 800; text-align: center;"
-                                else: return "background-color: #CAF0F8; color: #03045E; font-weight: 800; text-align: center;"
-                            except:
-                                return "text-align: center; background-color: rgba(255,255,255,0.7);"
-                        return ""
+                rep_clean["Manager"] = (
+                    rep_clean["Manager"].fillna("Unassigned").astype(str)
+                    .str.replace("Mr.", "", regex=False).str.strip()
+                )
+                rep_clean["Representative"] = (
+                    rep_clean["Representative"].fillna("Unknown").astype(str).str.strip()
+                )
 
-                    return df.style.apply(lambda x: [color_cells(v, x.name) for v in x], axis=1)\
-                                   .set_properties(**{'font-size': '15px', 'padding': '14px', 'border-right': '1px solid #CAF0F8'})\
-                                   .set_table_styles([
-                                       {'selector': 'th', 'props': [('color', '#023E8A'), ('font-size', '14px'), ('text-align', 'center'), ('background-color', '#ADE8F4'), ('border-bottom', '3px solid #0077B6')]}
-                                   ])
+                hierarchy_rows = []
+                for manager, manager_df in rep_clean.groupby("Manager", sort=True):
+                    manager_sales = manager_df["Sales"].sum()
+                    manager_target = manager_df["Target"].sum()
+                    hierarchy_rows.append({
+                        "Manager": manager,
+                        "Representative": "Manager total",
+                        "Sales": manager_sales,
+                        "Target": manager_target,
+                        "Achievement %": (manager_sales / manager_target * 100) if manager_target > 0 else 0,
+                        "Row type": "manager",
+                    })
 
-                st.dataframe(style_table(rep_t), use_container_width=True)
+                    for representative, rep_values in manager_df.groupby("Representative", sort=True):
+                        rep_sales = rep_values["Sales"].sum()
+                        rep_target = rep_values["Target"].sum()
+                        hierarchy_rows.append({
+                            "Manager": "",
+                            "Representative": f"↳ {representative}",
+                            "Sales": rep_sales,
+                            "Target": rep_target,
+                            "Achievement %": (rep_sales / rep_target * 100) if rep_target > 0 else 0,
+                            "Row type": "representative",
+                        })
+
+                grand_sales = rep_clean["Sales"].sum()
+                grand_target = rep_clean["Target"].sum()
+                hierarchy_rows.append({
+                    "Manager": "Grand Total",
+                    "Representative": "All representatives",
+                    "Sales": grand_sales,
+                    "Target": grand_target,
+                    "Achievement %": (grand_sales / grand_target * 100) if grand_target > 0 else 0,
+                    "Row type": "grand_total",
+                })
+
+                hierarchy_df = pd.DataFrame(hierarchy_rows)
+                display_df = hierarchy_df.drop(columns="Row type")
+
+                def style_hierarchy(row):
+                    row_type = hierarchy_df.loc[row.name, "Row type"]
+                    if row_type == "manager":
+                        return ["background-color: #ADE8F4; color: #03045E; font-weight: 800;"] * len(row)
+                    if row_type == "grand_total":
+                        return ["background-color: #03045E; color: white; font-weight: 800;"] * len(row)
+                    return [""] * len(row)
+
+                styled_hierarchy = (
+                    display_df.style
+                    .format({"Sales": "{:,.0f}", "Target": "{:,.0f}", "Achievement %": "{:.1f}%"})
+                    .apply(style_hierarchy, axis=1)
+                    .set_table_styles([
+                        {"selector": "th", "props": [
+                            ("background-color", "#03045E"), ("color", "white"),
+                            ("font-weight", "800"), ("text-align", "center")
+                        ]},
+                        {"selector": "td", "props": [
+                            ("border-bottom", "1px solid #CAF0F8"), ("padding", "10px")
+                        ]},
+                    ])
+                )
+                try:
+                    styled_hierarchy = styled_hierarchy.hide(axis="index")
+                except AttributeError:
+                    pass
+
+                st.dataframe(styled_hierarchy, use_container_width=True)
+            else:
+                st.info("No representative sales or target data is available for this date.")
+        else:
+            st.info("Manager, Representative, Sales, or Target data is not available for the summary table.")
 
 if __name__ == "__main__":
     show()

@@ -144,6 +144,12 @@ def show():
 
     st.write("")
     st.info("💡 Upload an Excel or CSV file to auto-fill the target. Ensure it has 'No' and 'Target' columns.")
+    
+    # අලුතින් එකතු කළ Template බාගත කිරීමේ බොත්තම
+    template_df = df_editable[["No", "Manager", "Route", "Representative", "Status", "Target"]].copy()
+    template_csv = template_df.to_csv(index=False).encode('utf-8-sig')
+    st.download_button("⬇️ Download Format Template (CSV)", data=template_csv, file_name=f"Rep_Target_Template_{month}.csv", mime="text/csv")
+
     uploaded_file = st.file_uploader("Upload Target File", type=["csv", "xlsx"], key="target_uploader")
     
     if uploaded_file is not None:
@@ -154,21 +160,29 @@ def show():
                 uploaded_df = pd.read_excel(uploaded_file)
             
             if "No" in uploaded_df.columns and "Target" in uploaded_df.columns:
-                uploaded_df["No"] = uploaded_df["No"].astype(str).str.strip()
+                uploaded_df["No"] = uploaded_df["No"].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                 uploaded_df["Target"] = pd.to_numeric(uploaded_df["Target"], errors="coerce").fillna(0)
                 
                 df_editable["No"] = df_editable["No"].astype(str).str.strip()
                 
-                df_editable = df_editable.set_index("No")
-                uploaded_df = uploaded_df.set_index("No")
-                df_editable.update(uploaded_df[["Target"]])
-                df_editable = df_editable.reset_index()
+                # Dtype mismatch errors වළක්වා ගැනීමට තීරුව Float බවට පත් කිරීම
+                df_editable["Target"] = df_editable["Target"].astype(float)
+                
+                # .update() වෙනුවට වඩාත් ආරක්ෂිත Dictionary mapping ක්‍රමය භාවිතා කිරීම
+                upload_dict = dict(zip(uploaded_df["No"], uploaded_df["Target"]))
+                df_editable["Target"] = df_editable.apply(
+                    lambda r: upload_dict.get(str(r["No"]), r["Target"]), 
+                    axis=1
+                )
                 
                 st.success("✅ File data loaded! Check the table below and click 'Save this month Target' to apply changes.")
             else:
                 st.error("⚠️ Uploaded file must contain 'No' and 'Target' columns.")
         except Exception as e:
             st.error(f"Error processing file: {e}")
+
+    # Table එකේ පිළිවෙළ අනිවාර්යයෙන්ම ඔයා ඉල්ලපු ආකාරයට සැකසීම
+    df_editable = df_editable[["No", "Manager", "Route", "Representative", "Status", "Target"]]
 
     max_val = df_editable["Target"].max()
     vmax_val = max_val if pd.notna(max_val) and max_val > 0 else 100000

@@ -1,5 +1,6 @@
 import calendar
 from datetime import datetime
+import calendar
 import re
 
 import gspread
@@ -255,20 +256,6 @@ def show():
             if "Day Achievement %" in df_display.columns:
                 styler = styler.map(color_achievement, subset=["Day Achievement %"])
             
-            grad_cols = [c for c in ["Sales", "Target", "Balance", "Day Target", "Day Target 2"] if c in df_display.columns]
-            if grad_cols:
-                try: styler = styler.background_gradient(subset=grad_cols, cmap="Blues")
-                except: pass
-
-        else:
-            week_cols = [c for c in df_display.columns if "Week" in c]
-            if week_cols:
-                try: styler = styler.background_gradient(subset=week_cols, cmap="Blues", vmin=0)
-                except: pass
-            if "Total Sales" in df_display.columns:
-                try: styler = styler.background_gradient(subset=["Total Sales"], cmap="PuBu", vmin=0)
-                except: pass
-
         styler = styler.set_table_styles([
             {'selector': 'th', 'props': [('background-color', '#03045E'), ('color', 'white'), ('text-align', 'center'), ('padding', '10px'), ('border', '1px solid #ADE8F4')]},
             {'selector': 'td', 'props': [('border', '1px solid #ADE8F4'), ('padding', '8px')]},
@@ -534,6 +521,25 @@ def show():
             padding-bottom: 2rem !important;
             max-width: 98% !important;
             overflow-x: hidden !important;
+            min-height: 85vh !important;
+        }
+
+        div[data-testid="stDateInput"] label p {
+            font-family: 'Arial', sans-serif !important;
+            font-weight: 600 !important;
+            font-size: 16px !important;
+            color: #03045E !important;
+        }
+        div[data-testid="stDateInput"] div[data-baseweb="input"] {
+            border: 2px solid #0096C7 !important;
+            border-radius: 8px !important;
+            background-color: #F8FDFF !important;
+            transition: all 0.3s ease-in-out;
+            padding-left: 5px;
+        }
+        div[data-testid="stDateInput"] div[data-baseweb="input"]:focus-within {
+            border: 2px solid #03045E !important;
+            box-shadow: 0 0 8px rgba(3, 4, 94, 0.4) !important;
         }
         /* DataFrame Styling for sharp edges and shadows */
         [data-testid="stDataFrame"] {
@@ -571,24 +577,14 @@ def show():
     
     st.title("Rep Sales & Targets Report")
 
-    # 🚀 SINGLE ROW BUTTONS (vertical_alignment="bottom" aligns buttons with Date input)
-    col1, col2, col3, col4, col5, col6 = st.columns([1.8, 1, 1, 1, 2,1], vertical_alignment="bottom")
-    
+    col1, col2 = st.columns([2, 5], vertical_alignment="bottom")
     with col1:
-        selected_date = st.date_input("Report Date", value=datetime.now())
-    with col3:
-        btn_refresh = st.button("🔄 Refresh Data")
-    with col4:
-        btn_calculate = st.button("▶ Calculate Report", type="primary")
-    with col6:
-        btn_save = st.button("💾 Save to Database")
+        selected_date = st.date_input("Select Date:", value=datetime.now().date())
 
     selected_date_str = selected_date.strftime("%Y-%m-%d")
     selected_month_str = pd.to_datetime(selected_date_str).strftime("%Y-%m")
-
-    if btn_refresh:
-        clear_raw_cache()
-        st.success("Cache cleared. Please calculate again for the latest data.")
+    st.divider()
+    btn_calculate_and_save = st.button("▶ Calculate & Save Report", type="primary")
 
     if st.session_state.get("rep_loaded_for_date") != selected_date_str:
         sheet2 = get_sheets()
@@ -615,9 +611,10 @@ def show():
     if st.session_state.get("rep_source") == "saved":
         st.info(f"A previously generated report already exists for '{selected_date_str}'. Showing that.")
 
-    if btn_calculate:
-        with st.spinner("Calculating..."):
+    if btn_calculate_and_save:
+        with st.spinner("Calculating and saving to Google Sheet..."):
             try:
+                clear_raw_cache()
                 master_table = build_master_table(selected_date_str)
                 weekly_table = build_weekly_breakdown(selected_date_str)
 
@@ -627,24 +624,15 @@ def show():
 
                 st.session_state["rep_weekly_table"] = weekly_table
                 st.session_state["rep_weekly_month"] = selected_month_str
-                st.session_state["rep_weekly_source"] = "calculated"
-            except Exception as e:
-                st.error(f"Error: {e}")
+                sheet2 = get_sheets()
+                save_report_to_sheet(sheet2, master_table, selected_date_str)
+                save_weekly_report_to_sheet(sheet2, weekly_table, selected_month_str)
 
-    if btn_save:
-        if "rep_master_table" in st.session_state and "rep_weekly_table" in st.session_state:
-            with st.spinner("Saving to Google Sheet..."):
-                try:
-                    sheet2 = get_sheets() 
-                    save_report_to_sheet(sheet2, st.session_state["rep_master_table"], st.session_state["rep_report_date"])
-                    save_weekly_report_to_sheet(sheet2, st.session_state["rep_weekly_table"], st.session_state.get("rep_weekly_month", selected_month_str))
-                    st.success(f"Report for '{st.session_state['rep_report_date']}' and its weekly breakdown were saved!")
-                    st.session_state["rep_source"] = "saved"
-                    st.session_state["rep_weekly_source"] = "saved"
-                except Exception as e:
-                    st.error(f"Failed to save: {e}")
-        else:
-            st.warning("⚠️ Please click 'Calculate Report' before saving.")
+                st.session_state["rep_source"] = "saved"
+                st.session_state["rep_weekly_source"] = "saved"
+                st.success(f"Report for '{selected_date_str}' and its weekly breakdown were saved!")
+            except Exception as e:
+                st.error(f"Error during calculation/saving: {e}")
 
     if "rep_master_table" in st.session_state:
         st.divider()

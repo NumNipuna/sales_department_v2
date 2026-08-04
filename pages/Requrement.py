@@ -1,6 +1,5 @@
 import streamlit as st
 import calendar
-from datetime import datetime
 import re
 import time
 import base64
@@ -8,7 +7,6 @@ import datetime
 import gspread
 import numpy as np
 import pandas as pd
-import streamlit as st
 from oauth2client.service_account import ServiceAccountCredentials
 
 def show():
@@ -124,7 +122,9 @@ def show():
             forecast_filtered["Forecast Qty"] = forecast_filtered["Forecast Qty"].apply(safe_float)
 
         if not daily_sale_filtered.empty and "Item" in daily_sale_filtered.columns:
-            daily_sale_filtered["Qty"] = daily_sale_filtered.get("Qty", 0).apply(safe_float)
+            if "Qty" not in daily_sale_filtered.columns:
+                daily_sale_filtered["Qty"] = 0.0
+            daily_sale_filtered["Qty"] = daily_sale_filtered["Qty"].apply(safe_float)
             sale_qty_grouped = daily_sale_filtered.groupby("Item")["Qty"].sum().reset_index()
             sale_qty = pd.merge(items_master, sale_qty_grouped, left_on="Item Name", right_on="Item", how="left")
             sale_qty["Qty"] = sale_qty["Qty"].fillna(0)
@@ -231,6 +231,8 @@ def show():
         total_weeks = ((days_in_month - 1 + first_weekday) // 7) + 1
         week_cols = [f"Week {i}" for i in range(1, total_weeks + 1)]
 
+        items_master = items_master.loc[:, ~items_master.columns.duplicated(keep="first")].copy()
+
         df = sales_day_book.copy()
         date_col = "New_date" if "New_date" in df.columns else "new_date" if "new_date" in df.columns else "Date"
 
@@ -245,7 +247,9 @@ def show():
         if df.empty or "Item" not in df.columns:
             weekly_pivot = pd.DataFrame(columns=["Item Name"] + week_cols)
         else:
-            df["Qty"] = df.get("Qty", 0).apply(safe_float)
+            if "Qty" not in df.columns:
+                df["Qty"] = 0.0
+            df["Qty"] = df["Qty"].apply(safe_float)
             df["day"] = df["Date_parsed"].dt.day
             df["week_num"] = ((df["day"] - 1 + first_weekday) // 7) + 1
             df["week_label"] = "Week " + df["week_num"].astype(int).astype(str)
@@ -492,6 +496,8 @@ def show():
 
     def _save_df_to_tab(sheet, tab_name: str, df: pd.DataFrame, key_col_name: str, key_value: str):
         df = df.copy()
+        df.columns = [str(col).strip() for col in df.columns]
+        df = df.loc[:, ~df.columns.duplicated(keep="first")].copy()
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
         df.insert(0, key_col_name, key_value)
 
@@ -545,11 +551,27 @@ def show():
         return _load_df_from_tab(sheet, "Req_Weekly", "Month", month_str)
 
     def enforce_numeric_types(df: pd.DataFrame) -> pd.DataFrame:
-        text_cols = ["Date", "Month", "Product Code", "Item Code", "Item Name", "Item", "No", "Category", "Brand"]
+        """Normalize report values and safely remove duplicate spreadsheet headers."""
+        df = df.copy()
+        df.columns = [str(col).strip() for col in df.columns]
+        df = df.loc[:, ~df.columns.duplicated(keep="first")].copy()
+
+        text_cols = [
+            "Date", "Month", "Product Code", "Item Code",
+            "Item Name", "Item", "No", "Category", "Brand"
+        ]
+
         for col in df.columns:
             if col not in text_cols:
-                df[col] = df[col].astype(str).str.replace(',', '', regex=False).str.replace('%', '', regex=False).str.strip()
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
+                cleaned = (
+                    df[col]
+                    .astype(str)
+                    .str.replace(",", "", regex=False)
+                    .str.replace("%", "", regex=False)
+                    .str.strip()
+                )
+                df[col] = pd.to_numeric(cleaned, errors="coerce").fillna(0.0)
+
         return df
 
     # ============================================================
@@ -687,6 +709,7 @@ def show():
                     with st.spinner("Deleting..."):
                         sheet1, _ = get_sheets()
                         _delete_records(sheet1, "Req_Report", "Date", selected_date_str)
+                        _delete_records(sheet1, "Req_Weekly", "Month", selected_month_str)
                         st.session_state["confirm_delete_report"] = False
                         save_and_refresh(f"🗑️ Report for {selected_date_str} successfully deleted!")
             with dc2:
@@ -700,6 +723,27 @@ def show():
         if st.button("▶ Calculate & Save Report", type="primary"):
             with st.spinner("Calculating and Saving to Database..."):
                 try:
+                    _, sales_day_book, _, _, _ = load_raw_data()
+                    date_col = (
+                        "New_date" if "New_date" in sales_day_book.columns
+                        else "new_date" if "new_date" in sales_day_book.columns
+                        else "Date"
+                    )
+                    has_sales_for_selected_date = False
+
+                    if date_col in sales_day_book.columns:
+                        sales_dates = pd.to_datetime(sales_day_book[date_col], errors="coerce")
+                        has_sales_for_selected_date = sales_dates.dt.normalize().eq(
+                            pd.Timestamp(selected_date_str)
+                        ).any()
+
+                    if not has_sales_for_selected_date:
+                        st.warning(
+                            f"No data has been entered in the Sales Day Book for {selected_date_str}. "
+                            "Please enter the required data in the Sales Day Book and try generating the report again."
+                        )
+                        return
+
                     master_table = build_master_table(selected_date_str)
                     _, _, _, items_master_raw, _ = load_raw_data()
                     weekly_table = build_weekly_breakdown(selected_date_str, items_master_raw)

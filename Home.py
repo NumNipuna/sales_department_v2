@@ -594,11 +594,18 @@ def main():
     else:
         try:
             module = importlib.import_module(f"pages.{selected}")
-            module.show()
         except ImportError as e:
             st.error(f"Error loading page '{selected}': {e}")
-        except AttributeError:
-            st.error(f"Page '{selected}' does not have a show() function.")
+        else:
+            page_show = getattr(module, "show", None)
+
+            if not callable(page_show):
+                st.error(f"Page '{selected}' does not have a show() function.")
+            else:
+                try:
+                    page_show()
+                except Exception as e:
+                    st.exception(e)
 
     # ==========================================
     # 🌟 OVERLAY LOGOUT ANIMATION 

@@ -169,7 +169,13 @@ def show():
     merged_forecast["Forecast Qty"] = pd.to_numeric(merged_forecast.get("Forecast Qty"), errors="coerce").fillna(0)
     
     st.write("")
-    st.info("💡 You can also upload a CSV or Excel file to auto-fill the forecast. Ensure it has 'Product Code' and 'Forecast Qty' columns.")
+    st.info("💡 Upload a CSV or Excel file to auto-fill the forecast. Required columns: 'Product Code', 'Item Name', 'Forecast Qty'.")
+    
+    # අලුතින් එකතු කළ Template බාගත කිරීමේ බොත්තම (පහසුවෙන් දත්ත පිරවීම සඳහා)
+    template_df = merged_forecast[["Product Code", "Item Name", "Forecast Qty"]].copy()
+    template_csv = template_df.to_csv(index=False).encode('utf-8-sig')
+    st.download_button("⬇️ Download Format Template (CSV)", data=template_csv, file_name=f"Forecast_Template_{forecast_year}_{forecast_month}.csv", mime="text/csv")
+    
     uploaded_file = st.file_uploader("Upload Forecast File", type=["csv", "xlsx"], key="forecast_uploader")
     
     if uploaded_file is not None:
@@ -183,10 +189,16 @@ def show():
                 uploaded_df["Product Code"] = uploaded_df["Product Code"].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                 uploaded_df["Forecast Qty"] = pd.to_numeric(uploaded_df["Forecast Qty"], errors="coerce").fillna(0)
                 
-                merged_forecast = merged_forecast.set_index("Product Code")
-                uploaded_df = uploaded_df.set_index("Product Code")
-                merged_forecast.update(uploaded_df[["Forecast Qty"]])
-                merged_forecast = merged_forecast.reset_index()
+                # Dtype mismatch errors වළක්වා ගැනීමට තීරුව Float බවට පත් කිරීම
+                merged_forecast["Forecast Qty"] = merged_forecast["Forecast Qty"].astype(float)
+                
+                # .update() වෙනුවට වඩාත් ආරක්ෂිත Dictionary mapping ක්‍රමය භාවිතා කිරීම
+                upload_dict = dict(zip(uploaded_df["Product Code"], uploaded_df["Forecast Qty"]))
+                merged_forecast["Forecast Qty"] = merged_forecast.apply(
+                    lambda r: upload_dict.get(str(r["Product Code"]), r["Forecast Qty"]), 
+                    axis=1
+                )
+                
                 st.success("✅ File data loaded! Check the table below and click 'Save Forecast' to apply changes.")
             else:
                 st.error("⚠️ Uploaded file must contain 'Product Code' and 'Forecast Qty' columns.")
@@ -194,6 +206,9 @@ def show():
             st.error(f"Error processing file: {e}")
             
     dynamic_editor_key = f"forecast_editor_{forecast_year}_{forecast_month}"
+    
+    # Table එකේ පිළිවෙළ අනිවාර්යයෙන්ම "Product Code", "Item Name", "Forecast Qty" ලෙස සැකසීම
+    merged_forecast = merged_forecast[["Product Code", "Item Name", "Forecast Qty"]]
     
     max_val = merged_forecast["Forecast Qty"].max()
     vmax_val = max_val if pd.notna(max_val) and max_val > 0 else 1000
