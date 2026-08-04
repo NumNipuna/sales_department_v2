@@ -68,7 +68,6 @@ if not os.path.exists("service_account.json"):
         st.stop()
 # ---------- Login form (main screen) ----------
 def show_login_form():
-    
     def get_base64_file(file_path):
         try:
             with open(file_path, "rb") as f:
@@ -267,120 +266,135 @@ def show_login_form():
     
     st.markdown(css_code + video_html, unsafe_allow_html=True)
 
-    # Create a placeholder for the login form and animations
-    login_placeholder = st.empty()
+    st.markdown(css_code + video_html, unsafe_allow_html=True)
 
-    # 1. Show the login form
-    with login_placeholder.container():
-        st.markdown("<div style='margin-top: 15vh;'></div>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns([1, 1.2, 1])
-        with col2:
-            st.markdown(f"""
-                <div style='text-align: center; margin-bottom: 40px;'>
-                    <img src="data:image/png;base64,{logo_base64}" style="width: 180px;">
-                <div style='margin-top: 35px;'>
-                        <span style='background-color: #052b6c; 
-                                    color: white; 
-                                    padding: 8px 20px; 
-                                    border-radius: 8px; 
-                                    font-weight: 800; 
-                                    font-size: 30px;
-                                    display: inline-block;
-                                    box-shadow: 0 4px 12px rgba(3, 4, 94, 0.4);'>
-                            Imo Chicken & Agro (Pvt) Ltd
-                        </span>
-                    </div>
+    st.markdown("<div style='margin-top: 15vh;'></div>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 1.2, 1])
+    with col2:
+        st.markdown(f"""
+            <div style='text-align: center; margin-bottom: 40px;'>
+                <img src="data:image/png;base64,{logo_base64}" style="width: 180px;">
+            <div style='margin-top: 35px;'>
+                    <span style='background-color: #052b6c; 
+                                color: white; 
+                                padding: 8px 20px; 
+                                border-radius: 8px; 
+                                font-weight: 800; 
+                                font-size: 30px;
+                                display: inline-block;
+                                box-shadow: 0 4px 12px rgba(3, 4, 94, 0.4);'>
+                        Imo Chicken & Agro (Pvt) Ltd
+                    </span>
                 </div>
-            """, unsafe_allow_html=True)
-            
-            with st.form("login_form"):
-                st.markdown("<h2>Login</h2>", unsafe_allow_html=True)
-                st.markdown("<p style='text-align: center; color: #666; margin-top: -10px; margin-bottom: 20px;'>Enter your credentials to access the portal</p>", unsafe_allow_html=True)
-                
-                username = st.text_input("Username", placeholder="Enter Username")
-                password = st.text_input("Password", type="password", placeholder="Enter Password")
-                
-                st.markdown("<br>", unsafe_allow_html=True)
-                login_btn = st.form_submit_button("Log in", use_container_width=True)
+            </div>
+        """, unsafe_allow_html=True)
 
-    # 2. Login Button Clicked
-    if login_btn:
-        # Validate the credentials
-        role = authenticate(username, password)
-        
-        if role:
-            # If credentials are valid, clear the login form and show access granted animation
-            login_placeholder.empty()
-            
-            # 3. show "ACCESS GRANTED" animation
-            with login_placeholder.container():
-                st.markdown("<div style='margin-top: 15vh;'></div>", unsafe_allow_html=True)
-                c1, c2, c3 = st.columns([1, 1.2, 1])
-                with c2:
-                    st.markdown("""
-                        <div class="success-box">
-                            <svg class="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
-                                <circle class="checkmark__circle" cx="26" cy="26" r="25" fill="none"/>
-                                <path class="checkmark__check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
-                            </svg>
-                            <h2 style="color: #03045e; margin-top: 20px; font-weight: 800;">Access Granted!</h2>
-                            <p style="color: #666; font-size: 15px; font-weight: 500;">Welcome back...</p>
-                        </div>
-                    """, unsafe_allow_html=True)
-            
-            # wait for 1.8 seconds to let the animation play before rerunning the app
-            time.sleep(1.8)
-            
-            # Set session state variables and rerun the app to show the main content
-            st.session_state.logged_in = True
-            st.session_state.username = username
-            st.session_state.role = role
-            
-            allowed_pages = get_allowed_pages(role)
-            if role == "admin":
-                st.session_state.current_page = "Home"
-            else: 
-                st.session_state.current_page = allowed_pages[0] if allowed_pages else "Home"
-            
-            st.rerun()
-            
-        else:
-            # If the credentials are invalid, clear the login form and show the access denied animation
-            login_placeholder.empty()
-            
-            # 4. show "ACCESS DENIED" animation
-            with login_placeholder.container():
-                st.markdown("<div style='margin-top: 15vh;'></div>", unsafe_allow_html=True)
-                c1, c2, c3 = st.columns([1, 1.2, 1])
-                with c2:
-                    st.markdown("""
-                        <div class="error-box">
-                            <svg class="crossmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
-                                <circle class="crossmark__circle" cx="26" cy="26" r="25" fill="none"/>
-                                <path class="crossmark__cross" fill="none" d="M16 16 36 36 M36 16 16 36"/>
-                            </svg>
-                            <h2 style="color: #D90429; margin-top: 20px; font-weight: 800;">Access Denied</h2>
-                            <p style="color: #666; font-size: 15px; font-weight: 500;">Invalid username or password.</p>
-                        </div>
-                    """, unsafe_allow_html=True)
-            
-            # Wait for 2 seconds to let the animation play
-            time.sleep(2)
-            
-            # Rerun the app to show the login form again
-            st.rerun()
+        with st.form("login_form"):
+            st.markdown("<h2>Login</h2>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center; color: #666; margin-top: -10px; margin-bottom: 20px;'>Enter your credentials to access the portal</p>", unsafe_allow_html=True)
 
+            username = st.text_input("Username", placeholder="Enter Username")
+            password = st.text_input("Password", type="password", placeholder="Enter Password")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            login_btn = st.form_submit_button("Log in", use_container_width=True)
+
+        if login_btn:
+            role = authenticate(username, password)
+            if role:
+                st.session_state.pending_username = username
+                st.session_state.pending_role = role
+                st.session_state.login_status = "granted"
+            else:
+                st.session_state.login_status = "denied"
+            st.rerun()
 # ---------- Logout ----------
 def logout():
     if st.sidebar.button("🚪 Logout", use_container_width=True):
-        for key in ["logged_in", "username", "role", "current_page"]:
-            st.session_state[key] = ""
-        st.session_state.logged_in = False
-        st.rerun()
+        st.session_state.logging_out = True
+        # no need to rerun here, the overlay will handle the logout process in the main function
 
 # ---------- Main ----------
 def main():
-    if not st.session_state.logged_in:
+    if st.session_state.get("login_status") == "granted":
+        st.markdown("""
+            <style>
+            .logout-overlay {
+                position: fixed; top:0; left:0; width:100vw; height:100vh;
+                background: rgba(255,255,255,0.4); backdrop-filter: blur(8px);
+                z-index: 999999; display:flex; justify-content:center; align-items:center;
+            }
+            .success-box {
+                background: rgba(255,255,255,0.95); backdrop-filter: blur(10px);
+                border-radius: 16px; padding: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+                text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center;
+            }
+            .checkmark { width:80px; height:80px; border-radius:50%; display:block; stroke-width:4; stroke:#0077B6; stroke-miterlimit:10; box-shadow:inset 0px 0px 0px #0077B6; animation: scale .3s ease-in-out .9s both; margin:0 auto; }
+            .checkmark__circle { stroke-dasharray:166; stroke-dashoffset:166; stroke-width:4; stroke-miterlimit:10; stroke:#0077B6; fill:none; animation: stroke 0.6s cubic-bezier(0.65,0,0.45,1) forwards; }
+            .checkmark__check { transform-origin:50% 50%; stroke-dasharray:48; stroke-dashoffset:48; stroke:#0077B6; stroke-width:4; animation: stroke 0.3s cubic-bezier(0.65,0,0.45,1) 0.6s forwards; }
+            @keyframes stroke { 100% { stroke-dashoffset:0; } }
+            @keyframes scale { 0%,100% { transform:none; } 50% { transform:scale3d(1.1,1.1,1); } }
+            </style>
+            <div class="logout-overlay">
+                <div class="success-box">
+                    <svg class="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+                        <circle class="checkmark__circle" cx="26" cy="26" r="25" fill="none"/>
+                        <path class="checkmark__check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+                    </svg>
+                    <h2 style="color:#03045e;margin-top:20px;font-weight:800;">Access Granted!</h2>
+                    <p style="color:#666;font-size:15px;font-weight:500;">Welcome back...</p>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        time.sleep(1.8)
+
+        st.session_state.logged_in = True
+        st.session_state.username = st.session_state.pending_username
+        st.session_state.role = st.session_state.pending_role
+        allowed_pages = get_allowed_pages(st.session_state.role)
+        st.session_state.current_page = "Home" if st.session_state.role == "admin" else (allowed_pages[0] if allowed_pages else "Home")
+
+        st.session_state.login_status = ""
+        st.rerun()
+
+    if st.session_state.get("login_status") == "denied":
+        st.markdown("""
+            <style>
+            .logout-overlay {
+                position: fixed; top:0; left:0; width:100vw; height:100vh;
+                background: rgba(255,255,255,0.4); backdrop-filter: blur(8px);
+                z-index: 999999; display:flex; justify-content:center; align-items:center;
+            }
+            .error-box {
+                background: rgba(255,255,255,0.95); backdrop-filter: blur(10px);
+                border-radius: 16px; padding: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+                text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center;
+            }
+            .crossmark { width:80px; height:80px; border-radius:50%; display:block; stroke-width:4; stroke:#D90429; stroke-miterlimit:10; box-shadow:inset 0px 0px 0px #D90429; animation: scale .3s ease-in-out .9s both; margin:0 auto; }
+            .crossmark__circle { stroke-dasharray:166; stroke-dashoffset:166; stroke-width:4; stroke-miterlimit:10; stroke:#D90429; fill:none; animation: stroke 0.6s cubic-bezier(0.65,0,0.45,1) forwards; }
+            .crossmark__cross { transform-origin:50% 50%; stroke-dasharray:48; stroke-dashoffset:48; stroke:#D90429; stroke-width:4; animation: stroke 0.3s cubic-bezier(0.65,0,0.45,1) 0.6s forwards; }
+            @keyframes stroke { 100% { stroke-dashoffset:0; } }
+            @keyframes scale { 0%,100% { transform:none; } 50% { transform:scale3d(1.1,1.1,1); } }
+            </style>
+            <div class="logout-overlay">
+                <div class="error-box">
+                    <svg class="crossmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+                        <circle class="crossmark__circle" cx="26" cy="26" r="25" fill="none"/>
+                        <path class="crossmark__cross" fill="none" d="M16 16 36 36 M36 16 16 36"/>
+                    </svg>
+                    <h2 style="color:#D90429;margin-top:20px;font-weight:800;">Access Denied</h2>
+                    <p style="color:#666;font-size:15px;font-weight:500;">Invalid username or password.</p>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        time.sleep(2)
+        st.session_state.login_status = ""
+        st.rerun()
+
+    if not st.session_state.get("logged_in", False):
+        show_login_form()
+        return
+    if not st.session_state.get("logged_in", False):
         show_login_form()
         return
 
@@ -467,6 +481,7 @@ def main():
         except Exception:
             pass
 
+# ---------- Sidebar Content ----------
     st.sidebar.markdown("<h3 style='text-align: center; color: #052b6c; font-weight: 900; margin-top: -10px; margin-bottom: 0px; border-bottom: none;'>IMO Chicken & Agro (Pvt) Ltd</h3>", unsafe_allow_html=True)
     st.sidebar.markdown("<hr style='margin-top: 15px; margin-bottom: 15px; border-top: 2px solid #0096C7 !important;'>", unsafe_allow_html=True)
 
@@ -497,7 +512,7 @@ def main():
         return clean_name.replace("_", " ").title()
     
     kpi_pages = [p for p in page_options if p in ["Home"]]
-    data_entry_pages = [p for p in page_options if p in ["1sales_by_product","1sales_day_book" , "2Inventory", "3Monthly_Forecast", "4Working_days", "5Rep_Target"]]
+    data_entry_pages = [p for p in page_options if p in ["1sales_day_book" , "2Inventory", "3Monthly_Forecast", "4Working_days", "5Rep_Target"]]
     report_pages = [p for p in page_options if p in ["Requrement", "rep_target"]]
     dashboard_pages = [p for p in page_options if p in ["dashboard"]]
 
@@ -584,6 +599,75 @@ def main():
             st.error(f"Error loading page '{selected}': {e}")
         except AttributeError:
             st.error(f"Page '{selected}' does not have a show() function.")
+
+    # ==========================================
+    # 🌟 OVERLAY LOGOUT ANIMATION 
+    # (Rendered on top of the existing page content)
+    # ==========================================
+    if st.session_state.get("logging_out", False):
+        st.markdown("""
+            <style>
+            .logout-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background: rgba(255, 255, 255, 0.4);
+                backdrop-filter: blur(8px);
+                z-index: 999999;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+            .spinner-box {
+                background: rgba(255, 255, 255, 0.95);
+                border-radius: 16px;
+                padding: 40px;
+                box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+                text-align: center;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                animation: scaleIn 0.3s ease-out;
+            }
+            @keyframes scaleIn {
+                from { transform: scale(0.9); opacity: 0; }
+                to { transform: scale(1); opacity: 1; }
+            }
+            .loader {
+                border: 6px solid #e2e8f0;
+                border-top: 6px solid #0077B6;
+                border-radius: 50%;
+                width: 60px;
+                height: 60px;
+                animation: spin 1s linear infinite;
+                margin: 0 auto 20px auto;
+            }
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            </style>
+            <div class="logout-overlay">
+                <div class="spinner-box">
+                    <div class="loader"></div>
+                    <h2 style="color: #03045E; font-weight: 800; margin:0;">Logging Out...</h2>
+                    <p style="color: #666; font-size: 15px; margin-top: 5px;">Securely ending your session.</p>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # තත්පර 1.5ක් මේ Animation එක පෙන්වා ඉඳීම
+        time.sleep(1.5)
+        
+        # ඉන්පසුව Session State සියල්ල මකා දැමීම (සම්පූර්ණ Logout වීම)
+        for key in ["logged_in", "username", "role", "current_page", "logging_out"]:
+            if key in st.session_state:
+                del st.session_state[key]
+                
+        st.session_state.logged_in = False
+        st.rerun()
 
 if __name__ == "__main__":
     main()

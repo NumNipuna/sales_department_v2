@@ -1,4 +1,3 @@
-# pages/rep_target.py
 import streamlit as st
 from util import connect_to_sheets2
 import pandas as pd
@@ -7,25 +6,13 @@ import datetime
 import time
 from gspread_dataframe import set_with_dataframe
 
-
 def show():
     st.title("Rep Target")
     st.write("Welcome, Pradeep...! This is your private area.")
     st.write("Here you can enter data.")
-
+    
     st.sidebar.markdown("---")
-    if st.sidebar.button("🔄 Refresh All Data", key="rep_target_refresh_btn"):
-        try:
-            _cached_records.clear()
-        except NameError:
-            pass
-        try:
-            get_connection.clear()
-        except NameError:
-            pass
-        st.rerun()
 
-    # --- CONNECTION (cached as a resource, not re-created on every rerun) ---
     @st.cache_resource(show_spinner=False)
     def get_connection():
         sh = connect_to_sheets2()
@@ -40,10 +27,6 @@ def show():
         st.error(f"Error connecting to Google Sheets: {e}")
         st.stop()
 
-    # --- CACHED READS ---
-    # Same pattern as the other pages: reads are cached for 5 minutes and the
-    # cache is cleared right after any save, so you always see fresh data
-    # immediately after saving something.
     @st.cache_data(ttl=300, show_spinner=False)
     def _cached_records(_ws, sheet_key):
         return _ws.get_all_records()
@@ -54,33 +37,13 @@ def show():
     def invalidate_sheet_cache():
         _cached_records.clear()
 
-    def save_and_refresh(message, seconds=1):
-        """Call after any write: invalidates the cache, shows a success message,
-        holds it for `seconds`, then refreshes the page."""
+    def save_and_refresh(message, seconds=2):
         invalidate_sheet_cache()
         msg_placeholder = st.empty()
         msg_placeholder.success(message)
         time.sleep(seconds)
         msg_placeholder.empty()
         st.rerun()
-
-    def get_rows_for_column(ws_obj, sheet_key, column, value_str):
-        """Return existing rows in a sheet that match a given value in `column`."""
-        records = get_records(ws_obj, sheet_key)
-        df = pd.DataFrame(records)
-        if df.empty or column not in df.columns:
-            return pd.DataFrame()
-        return df[df[column].astype(str) == value_str]
-
-    def delete_rows_for_column(ws_obj, sheet_key, column, value_str):
-        """Permanently remove all rows matching a given value in `column`, keeping everything else."""
-        records = get_records(ws_obj, sheet_key)
-        df = pd.DataFrame(records)
-        if df.empty or column not in df.columns:
-            return
-        remaining = df[df[column].astype(str) != value_str]
-        ws_obj.clear()
-        set_with_dataframe(ws_obj, remaining if not remaining.empty else pd.DataFrame(columns=df.columns))
 
     MONTH_OPTIONS = ["2026-Jan", "2026-Feb", "2026-Mar", "2026-Apr",
                      "2026-May", "2026-Jun", "2026-Jul", "2026-Aug",
@@ -89,17 +52,69 @@ def show():
                      "2027-May", "2027-Jun", "2027-Jul", "2027-Aug",
                      "2027-Sep", "2027-Oct", "2027-Nov", "2027-Dec"]
 
-    st.subheader("Update Rep Targets & Sales Day Book")
-    st.caption("Manage representative targets and sales day book information from this page.")
-    st.divider()
+    st.markdown("""
+        <style>
+        div[data-testid="stSelectbox"] label p {
+            font-family: 'Arial', sans-serif !important;
+            font-weight: 600 !important;
+            font-size: 16px !important;
+            color: #03045E !important;
+        }
+        
+        div[data-testid="stSelectbox"] div[data-baseweb="select"] {
+            border: 2px solid #0096C7 !important; 
+            border-radius: 8px !important;        
+            background-color: #F8FDFF !important; 
+            transition: all 0.3s ease-in-out;     
+        }
+        
+        div[data-testid="stSelectbox"] div[data-baseweb="select"]:focus-within {
+            border: 2px solid #03045E !important; 
+            box-shadow: 0 0 8px rgba(3, 4, 94, 0.4) !important;
+        }
+        
+        [data-testid="stDataFrame"] {
+            border: 2px solid #0096C7 !important;
+            border-radius: 8px !important;
+            overflow: hidden !important;
+        }
+        
+        div[data-testid="stFileUploader"] label p {
+            font-family: 'Arial', sans-serif !important;
+            font-weight: 600 !important;
+            font-size: 16px !important;
+            color: #03045E !important;
+        }
+        
+        div[data-testid="stFileUploaderDropzone"] {
+            border: 2px dashed #0096C7 !important; 
+            border-radius: 8px !important;
+            background-color: #F8FDFF !important; 
+            transition: all 0.3s ease-in-out;
+        }
+        
+        div[data-testid="stFileUploaderDropzone"]:hover {
+            border: 2px dashed #03045E !important;
+            background-color: #EAF8FF !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
+    def section_banner(text):
+        st.markdown(f'<div class="section-banner" style="background-color:#052b6c;color:white;padding:10px;border-radius:5px;font-weight:bold;">{text}</div>', unsafe_allow_html=True)
+
+    section_banner("🎯 Set Rep Target")
+    st.caption("Manage representative targets. Upload an Excel/CSV file or enter manually.")
+    
     current_month_str = datetime.date.today().strftime("%Y-%b")
     default_month_index = (MONTH_OPTIONS.index(current_month_str)
-                            if current_month_str in MONTH_OPTIONS else 0)
-    col1, col2 = st.columns([1, 3])
+                           if current_month_str in MONTH_OPTIONS else 0)
+    
+    col1, col2 = st.columns([1, 3], vertical_alignment="bottom")
     with col1:
         month = st.selectbox("Select Month", MONTH_OPTIONS, index=default_month_index, key="month_select")
-    st.subheader(f"📍 Enter the target for {month}")
+        
+    st.divider()
 
     master_records = get_records(ws_master, "master")
     df_master = pd.DataFrame(master_records) if master_records else pd.DataFrame(
@@ -117,13 +132,53 @@ def show():
     df_editable = df_master.copy()
     if "Target" not in df_editable.columns:
         df_editable["Target"] = 0
+        
     if not df_existing.empty and "No" in df_existing.columns:
         df_editable = df_editable.merge(
             df_existing[["No", "Target"]], on="No", how="left", suffixes=("", "_existing"))
         if "Target_existing" in df_editable.columns:
             df_editable["Target"] = df_editable["Target_existing"].fillna(0)
             df_editable = df_editable.drop(columns=["Target_existing"])
+            
     df_editable["Target"] = pd.to_numeric(df_editable["Target"], errors="coerce").fillna(0)
+
+    st.write("")
+    st.info("💡 Upload an Excel or CSV file to auto-fill the target. Ensure it has 'No' and 'Target' columns.")
+    uploaded_file = st.file_uploader("Upload Target File", type=["csv", "xlsx"], key="target_uploader")
+    
+    if uploaded_file is not None:
+        try:
+            if uploaded_file.name.endswith('.csv'):
+                uploaded_df = pd.read_csv(uploaded_file)
+            else:
+                uploaded_df = pd.read_excel(uploaded_file)
+            
+            if "No" in uploaded_df.columns and "Target" in uploaded_df.columns:
+                uploaded_df["No"] = uploaded_df["No"].astype(str).str.strip()
+                uploaded_df["Target"] = pd.to_numeric(uploaded_df["Target"], errors="coerce").fillna(0)
+                
+                df_editable["No"] = df_editable["No"].astype(str).str.strip()
+                
+                df_editable = df_editable.set_index("No")
+                uploaded_df = uploaded_df.set_index("No")
+                df_editable.update(uploaded_df[["Target"]])
+                df_editable = df_editable.reset_index()
+                
+                st.success("✅ File data loaded! Check the table below and click 'Save this month Target' to apply changes.")
+            else:
+                st.error("⚠️ Uploaded file must contain 'No' and 'Target' columns.")
+        except Exception as e:
+            st.error(f"Error processing file: {e}")
+
+    max_val = df_editable["Target"].max()
+    vmax_val = max_val if pd.notna(max_val) and max_val > 0 else 100000
+
+    styled_df = df_editable.style.background_gradient(
+        subset=["Target"], 
+        cmap="Blues",
+        vmin=-100, 
+        vmax=vmax_val
+    )
 
     column_config = {
         "No": st.column_config.TextColumn("No", disabled=True, width="small"),
@@ -136,7 +191,7 @@ def show():
 
     dynamic_editor_key = f"target_editor_{month}"
     edited_df = st.data_editor(
-        df_editable,
+        styled_df,
         column_config=column_config,
         use_container_width=True,
         hide_index=True,
@@ -144,6 +199,7 @@ def show():
         key=dynamic_editor_key,
     )
 
+    st.write("")
     if st.button("💾 Save this month Target", type="primary", key=f"save_target_btn_{month}"):
         with st.spinner("Saving..."):
             save_df = edited_df.copy()
@@ -159,5 +215,5 @@ def show():
             final_targets = pd.concat([remainder, save_df], ignore_index=True)
             ws_targets.clear()
             set_with_dataframe(ws_targets, final_targets)
+            
         save_and_refresh(f"✅ Data successfully saved for {month}!")
-

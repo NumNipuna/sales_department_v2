@@ -319,7 +319,7 @@ def show():
             <div class="info-section">
                 <table style="width: 100%; border: none;">
                     <tr>
-                        <td style="text-align: left; border: none; padding: 0;"><h3>Department: Sales & Marketing</h3></td>
+                        <td style="text-align: left; border: none; padding: 0;"><h3>Department: Sales & Admin</h3></td>
                         <td style="text-align: center; border: none; padding: 0;"><h3>Report: {title}</h3></td>
                         <td style="text-align: right; border: none; padding: 0;"><h3>Date: {date_str}</h3></td>
                     </tr>
