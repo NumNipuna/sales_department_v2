@@ -103,7 +103,7 @@ def show():
     def section_banner(text):
         st.markdown(f'<div class="section-banner" style="background-color:#052b6c;color:white;padding:10px;border-radius:5px;font-weight:bold;">{text}</div>', unsafe_allow_html=True)
 
-    section_banner("🎯 Set Rep Target")
+    section_banner("🎯 Set Rep Target (Monthly)")
     st.caption("Manage representative targets. Upload an Excel/CSV file or enter manually.")
     
     current_month_str = datetime.date.today().strftime("%Y-%b")
