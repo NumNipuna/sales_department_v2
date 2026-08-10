@@ -507,13 +507,18 @@ def main():
     def format_page_name(name):
         if name == "Home":
             return "KPI" # For Home page, display as "KPI"
+        if name == "dashboard":
+            return "Production Requirement" # For dashboard page, display as "Production requirement"
+        if name == "1DSR_Report":
+            return "DSR Report"
+
         # clear the unusefull 
         clean_name = re.sub(r'^[\d_]+', '', name)
         return clean_name.replace("_", " ").title()
     
     kpi_pages = [p for p in page_options if p in ["Home"]]
-    data_entry_pages = [p for p in page_options if p in ["1sales_day_book" , "2Inventory", "3Monthly_Forecast", "4Working_days", "5Rep_Target"]]
-    report_pages = [p for p in page_options if p in ["Requrement", "rep_target"]]
+    data_entry_pages = [p for p in page_options if p in ["1sales_day_book" , "2Inventory", "3Monthly_Forecast", "4Working_days", "5Rep_Target","1DSR_Report","2Cash_Collection_and_Deposit","Reconciliation"]]
+    report_pages = [p for p in page_options if p in ["Requirement", "rep_target"]]
     dashboard_pages = [p for p in page_options if p in ["dashboard"]]
 
     def nav_callback(radio_key):

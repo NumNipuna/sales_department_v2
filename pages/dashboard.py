@@ -123,15 +123,17 @@ def apply_custom_css():
         }
 
         /* Chart & Table Card Styling */
-        [data-testid="stPlotlyChart"], .stDataFrame {
-            background-color: rgba(255, 255, 255, 0.85);
-            border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(2, 62, 138, 0.08);
-            border: 1px solid var(--c-200);
-            padding: 10px;
-            margin-bottom: 1rem;
+        [data-testid="stPlotlyChart"], iframe, [data-testid="stHtml"], .stDataFrame {
+            background-color: rgba(255, 255, 255, 0.85) !important;
+            border-radius: 12px !important;
+            box-shadow: 0 8px 24px rgba(2, 62, 138, 0.08) !important;
+            border: 1px solid var(--c-200) !important;
+            padding: 10px !important;
+            margin-bottom: 1rem !important;
             animation: fadeSlideUp 0.8s ease-out forwards;
             backdrop-filter: blur(10px);
+            display: block;
+            width: 100%;
         }
 
         /* KPI Cards */
@@ -283,7 +285,7 @@ def render_kpi_cards(total_target, total_sale, forecast_ach, active_reps, varian
                     <div class="kpi-sub" style="color: #0077B6;">Engaged in Sales</div>
                 </div>
                 <div class="kpi-card" style="border-top-color: #0096C7;">
-                    <div class="kpi-title">Variance to Target</div>
+                    <div class="kpi-title">Variance to Target up to date</div>
                     <div class="kpi-value"><span style="color: {var_color};">{variance_to_target * progress:,.0f} kg</span></div>
                     <div class="kpi-sub" style="color: {var_color};">Sales - Day Target</div>
                 </div>
@@ -293,15 +295,13 @@ def render_kpi_cards(total_target, total_sale, forecast_ach, active_reps, varian
             time.sleep(0.025)
 
 def render_animated_chart(fig, height, animation_kind="default"):
-    """Render a Plotly chart without scrollbars and animate its first appearance."""
+    """Render a Plotly chart without scrollbars, animate smoothly, and replay on click."""
     def as_list(values):
         """Convert Plotly/Pandas/Numpy values to a list without boolean-testing arrays."""
         return [] if values is None else list(values)
 
     target = json.loads(fig.to_json())
 
-    # Plotly can serialize Pandas/Numpy values in a typed internal format.
-    # Convert animated axes to ordinary lists so Python and JavaScript can slice them safely.
     for index, trace in enumerate(target.get("data", [])):
         source_trace = fig.data[index]
         for axis in ("x", "y", "values"):
@@ -314,72 +314,118 @@ def render_animated_chart(fig, height, animation_kind="default"):
     for index, trace in enumerate(initial.get("data", [])):
         source_trace = fig.data[index]
         trace_type = trace.get("type")
+        
         if trace_type == "indicator":
             trace["value"] = 0
         elif trace_type == "pie":
-            values = as_list(getattr(source_trace, "values", None))
-            trace["values"] = [1] * len(values)
+            trace["opacity"] = 0
+            trace["rotation"] = -90
         elif trace_type == "bar":
             value_axis = "x" if trace.get("orientation") == "h" else "y"
             values = as_list(getattr(source_trace, value_axis, None))
             trace[value_axis] = [0] * len(values)
         elif trace_type == "scatter":
             if animation_kind == "line":
-                for axis in ("x", "y"):
-                    values = as_list(getattr(source_trace, axis, None))
-                    if values:
-                        trace[axis] = values[:1]
+                values = as_list(getattr(source_trace, "y", None))
+                if values:
+                    trace["y"] = [values[0]] + [None] * (len(values) - 1)
             elif "y" in trace:
                 values = as_list(getattr(source_trace, "y", None))
                 trace["y"] = [0] * len(values)
 
     chart_html = f"""
     <style>
-        html, body {{ margin: 0; padding: 0; overflow: hidden; background: transparent; }}
-        #animated-chart {{ width: 100%; height: {height}px; overflow: hidden; }}
+        /* Cursor එක අතක සලකුණක් වීම (Clickable බව පෙන්වන්න) */
+        html, body {{ margin: 0; padding: 0; overflow: hidden; background: transparent; cursor: pointer; }}
+        
+        #animated-chart {{ 
+            width: 100%; 
+            height: {height}px; 
+            overflow: hidden; 
+            transition: transform 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+            border-radius: 12px;
+        }}
+        
+        /* Click කළ විට ඇතිවන Highlight Effect එක */
+        .chart-clicked {{
+            transform: scale(0.98);
+            box-shadow: 0px 0px 20px rgba(0, 150, 199, 0.4) inset;
+        }}
     </style>
     <div id="animated-chart"></div>
     <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
     <script>
         const chart = document.getElementById("animated-chart");
-        const initial = {json.dumps(initial, cls=PlotlyJSONEncoder)};
-        const target = {json.dumps(target, cls=PlotlyJSONEncoder)};
+        const initialRaw = {json.dumps(initial, cls=PlotlyJSONEncoder)};
+        const targetRaw = {json.dumps(target, cls=PlotlyJSONEncoder)};
         const config = {json.dumps(plotly_config)};
+        let animTimer = null;
 
-        Plotly.newPlot(chart, initial.data, initial.layout, config).then(() => {{
-            if ("{animation_kind}" === "line") {{
-                const lineTrace = target.data.find(trace => trace.type === "scatter" && (trace.mode || "").includes("lines"));
-                const totalPoints = lineTrace && lineTrace.x ? lineTrace.x.length : 1;
-                const steps = Math.min(24, Math.max(1, totalPoints));
+        // Animation එක Play කරන Function එක
+        function playAnimation() {{
+            if (animTimer) clearInterval(animTimer);
+            
+            // මුලින්ම Chart එක Initial තත්වයට Reset කිරීම
+            const initialData = JSON.parse(JSON.stringify(initialRaw.data));
+            Plotly.react(chart, initialData, initialRaw.layout, config).then(() => {{
+                
+                const steps = 30;
                 let currentStep = 0;
-                const timer = setInterval(() => {{
+                
+                animTimer = setInterval(() => {{
                     currentStep += 1;
                     const progress = currentStep / steps;
-                    const pointCount = Math.max(1, Math.ceil(totalPoints * progress));
-                    const frameData = target.data.map(trace => {{
-                        const nextTrace = JSON.parse(JSON.stringify(trace));
-                        if (nextTrace.type === "scatter" && (nextTrace.mode || "").includes("lines")) {{
-                            nextTrace.x = nextTrace.x.slice(0, pointCount);
-                            nextTrace.y = nextTrace.y.slice(0, pointCount);
-                        }} else if (nextTrace.type === "bar") {{
-                            const axis = nextTrace.orientation === "h" ? "x" : "y";
-                            nextTrace[axis] = nextTrace[axis].map(value => value * progress);
+                    const ease = 1 - Math.pow(1 - progress, 3); 
+
+                    const frameData = JSON.parse(JSON.stringify(targetRaw.data)).map(trace => {{
+                        if (trace.type === "pie") {{
+                            trace.opacity = ease; 
+                            const finalRot = trace.rotation || 0;
+                            trace.rotation = finalRot - 90 * (1 - ease); 
+                        }} else if (trace.type === "indicator") {{
+                            trace.value = trace.value * ease;
+                        }} else if (trace.type === "bar") {{
+                            const axis = trace.orientation === "h" ? "x" : "y";
+                            trace[axis] = trace[axis].map(v => v * ease);
+                        }} else if (trace.type === "scatter") {{
+                            if ("{animation_kind}" === "line") {{
+                                const totalPoints = trace.x ? trace.x.length : 1;
+                                const pointCount = Math.max(1, Math.ceil(totalPoints * progress));
+                                trace.y = trace.y.map((v, i) => i < pointCount ? v : null);
+                            }} else {{
+                                trace.y = trace.y.map(v => v * ease);
+                            }}
                         }}
-                        return nextTrace;
+                        return trace;
                     }});
-                    Plotly.react(chart, frameData, target.layout, config);
+
+                    Plotly.react(chart, frameData, targetRaw.layout, config);
+
                     if (currentStep >= steps) {{
-                        clearInterval(timer);
-                        Plotly.react(chart, target.data, target.layout, config);
+                        clearInterval(animTimer);
+                        Plotly.react(chart, JSON.parse(JSON.stringify(targetRaw.data)), targetRaw.layout, config);
                     }}
-                }}, 45);
-            }} else {{
-                Plotly.animate(chart, {{data: target.data, layout: target.layout}}, {{
-                    transition: {{duration: 1100, easing: "cubic-in-out"}},
-                    frame: {{duration: 1100, redraw: true}},
-                    mode: "afterall"
-                }});
-            }}
+                }}, 35);
+            }});
+        }}
+
+        // 1. Dashboard එක Load වෙද්දී මුලින්ම Animation එක දුවන්න
+        Plotly.newPlot(chart, JSON.parse(JSON.stringify(initialRaw.data)), initialRaw.layout, config).then(() => {{
+            playAnimation();
+        }});
+
+        // 2. Chart එක Click කළ විට Event එක
+        document.body.addEventListener("click", () => {{
+            // Highlight / Push effect එක එකතු කිරීම
+            chart.classList.add("chart-clicked");
+            
+            // මිලි තත්පර 150 කින් ඒ effect එක ඉවත් කිරීම
+            setTimeout(() => {{
+                chart.classList.remove("chart-clicked");
+            }}, 150);
+            
+            // Animation එක ආයෙමත් මුලේ ඉඳන් Play කිරීම
+            playAnimation();
         }});
     </script>
     """
@@ -518,7 +564,7 @@ def show():
                 ).fillna(0)
                 
                 Day_target = valid_rep_data["Day Target"].sum()
-
+        st.write(f"Day Target: {Day_target}")
         overall_ach = (total_sale / total_target * 100) if total_target > 0 else 0
         daily_avg = total_sale / Worked_Days if Worked_Days > 0 else 0
         variance_to_target = total_sale - Day_target
@@ -547,7 +593,7 @@ def show():
             ))
             fig_gauge = apply_plotly_layout(fig_gauge, "Overall Target Achievement")
             fig_gauge.update_layout(height=320, margin=dict(t=60, b=10, l=20, r=20))
-            st.plotly_chart(fig_gauge, use_container_width=True, config=plotly_config)
+            render_animated_chart(fig_gauge, height=320)
 
         with r1c2:
             # Sales by Product Group (Pie)
@@ -565,7 +611,7 @@ def show():
                 fig_pie.update_traces(textinfo='percent+label', textfont_size=14, marker=dict(line=dict(color='#FFFFFF', width=2)))
                 fig_pie = apply_plotly_layout(fig_pie, "Sales by Product Group")
                 fig_pie.update_layout(height=320, showlegend=False, margin=dict(t=60, b=20, l=10, r=10))
-                st.plotly_chart(fig_pie, use_container_width=True, config=plotly_config)
+                render_animated_chart(fig_pie, height=320)
             else:
                 st.info("Product Code / Qty data not available for pie chart.")
 
@@ -645,9 +691,12 @@ def show():
             st.plotly_chart(fig_combo, use_container_width=True, config=plotly_config)
         else:
             st.info("Qty / Forecast Qty data not available for bar chart.")
+            #render_animated_chart(fig_combo, height=500, animation_kind="line")
+        #else:
+            #st.info("Qty / Forecast Qty data not available for bar chart.")
 
         # ================== ROW 4 ==================
-        st.markdown("<h4 style='color: #03045E; margin-top: 1rem; font-weight: 800;'>Rep, Dealer, Horreca: Day Target vs Actual Sales</h4>", unsafe_allow_html=True)
+        #st.markdown("<h4 style='color: #03045E; margin-top: 1rem; font-weight: 800;'>Rep, Dealer, Horreca: Day Target vs Actual Sales</h4>", unsafe_allow_html=True)
         
         required_status_cols = {"Status", "Sales", "Day Target"}
         if required_status_cols.issubset(rep_df.columns):
@@ -697,7 +746,7 @@ def show():
                 )
             ))
             
-            fig_status = apply_plotly_layout(fig_status, "Day Target vs Actual Sales by Representative Status")
+            fig_status = apply_plotly_layout(fig_status, f"Day Target vs Actual Sales by Representative Status (As of {latest_date.strftime('%Y-%m-%d')})")
             
             fig_status.update_layout(
                 height=500, 
@@ -709,6 +758,131 @@ def show():
             st.plotly_chart(fig_status, use_container_width=True, config=plotly_config)
         else:
             st.info("Status, Sales, or Day Target data is not available for this chart.")
+
+        # ================== HIERARCHY TREEMAP ==================
+        st.markdown(f"<h4 style='color: #03045E; margin-top: 2rem; font-weight: 800;'>🏆 Manager & Representative Performance (As of {latest_date.strftime('%Y-%m-%d')})</h4>", unsafe_allow_html=True)
+        
+        required_tree_cols = {"Manager", "Representative", "Sales", "Day Target"}
+        if required_tree_cols.issubset(rep_df_all.columns):
+            # තෝරාගත් දින පරාසයේ (Date Range) සියලුම දත්ත ලබාගැනීම
+            tree_date_filtered = rep_df_all[
+                (rep_df_all["Date"].dt.date >= start_date) & 
+                (rep_df_all["Date"].dt.date <= end_date)
+            ].copy()
+            
+            # දත්ත නිවැරදි සංඛ්‍යා බවට පත්කිරීම
+            tree_date_filtered["Day Target"] = pd.to_numeric(tree_date_filtered["Day Target"].astype(str).str.replace(',', '', regex=False).replace(r'^\s*-\s*$', '0', regex=True), errors='coerce').fillna(0)
+            tree_date_filtered["Sales"] = pd.to_numeric(tree_date_filtered["Sales"].astype(str).str.replace(',', '', regex=False).replace(r'^\s*-\s*$', '0', regex=True), errors='coerce').fillna(0)
+
+            # 0 ට වඩා වැඩි දත්ත පමණක් Filter කර ගැනීම
+            tree_valid = tree_date_filtered[(tree_date_filtered["Sales"] > 0) | (tree_date_filtered["Day Target"] > 0)].copy()
+            
+            if not tree_valid.empty:
+                # Manager ගේ සහ Rep ගේ නම් පිරිසිදු කිරීම
+                tree_valid["Manager"] = tree_valid["Manager"].fillna("Unassigned").astype(str).str.strip()
+                tree_valid["Representative"] = tree_valid["Representative"].fillna("Unknown").astype(str).str.strip()
+
+                # Arrays for Custom Treemap
+                ids = []
+                labels = []
+                parents = []
+                values = []
+                colors = []
+                texts = []
+                hover_texts = []
+
+                # 1. Root Node (All Teams)
+                total_target = tree_valid["Day Target"].sum()
+                total_sales = tree_valid["Sales"].sum()
+                overall_ach = (total_sales / total_target * 100) if total_target > 0 else 0
+
+                ids.append("All Teams")
+                # 🚀 මෙතන තමයි වෙනස් වුණේ: Label එක ඇතුළෙම අකුරු ලොකු කිරීම
+                labels.append("<span style='font-size: 24px; font-weight: bold;'>All Teams</span>")
+                parents.append("")
+                values.append(0) 
+                colors.append(overall_ach)
+                texts.append(f"<span style='font-size:20px'><b>All Teams</b></span><br>{overall_ach:.1f}%")
+                hover_texts.append(f"<b>All Teams</b><br>Sales: {total_sales:,.0f}<br>Target: {total_target:,.0f}<br>Ach: {overall_ach:.1f}%")
+
+                # 2. Group by Manager
+                for manager, m_df in tree_valid.groupby("Manager"):
+                    m_target = m_df["Day Target"].sum()
+                    m_sales = m_df["Sales"].sum()
+                    m_ach = (m_sales / m_target * 100) if m_target > 0 else 0
+                    
+                    m_id = f"mgr_{manager}" # Unique ID
+                    
+                    ids.append(m_id)
+                    # 🚀 මෙතනත් වෙනස් වුණේ: Manager ගේ නම Label එකෙන්ම ලොකු කිරීම
+                    labels.append(f"<span style='font-size: 18px; font-weight: bold;'>{manager}</span>")
+                    parents.append("All Teams")
+                    values.append(0) 
+                    colors.append(m_ach)
+                    
+                    texts.append(f"<span style='font-size:16px'><b>{manager}</b></span><br>{m_ach:.1f}%")
+                    hover_texts.append(f"<b>Manager: {manager}</b><br>Sales: {m_sales:,.0f}<br>Target: {m_target:,.0f}<br>Ach: {m_ach:.1f}%")
+
+                    # 3. Rep Data
+                    r_grouped = m_df.groupby("Representative")[["Sales", "Day Target"]].sum().reset_index()
+                    for _, row in r_grouped.iterrows():
+                        rep = row["Representative"]
+                        r_target = row["Day Target"]
+                        r_sales = row["Sales"]
+                        r_ach = (r_sales / r_target * 100) if r_target > 0 else 0
+                        
+                        r_id = f"rep_{manager}_{rep}" # Unique ID
+                        
+                        r_size = r_target if r_target > 0 else r_sales
+                        if r_size <= 0:
+                            r_size = 1 
+                            
+                        ids.append(r_id)
+                        labels.append(rep) # Rep ගේ නම සාමාන්‍ය ප්‍රමාණයෙන්
+                        parents.append(m_id)
+                        values.append(r_size) 
+                        colors.append(r_ach)
+                        
+                        texts.append(f"<b>{rep}</b><br>{r_ach:.1f}%")
+                        hover_texts.append(f"<b>Rep: {rep}</b> ({manager})<br>Sales: {r_sales:,.0f}<br>Target: {r_target:,.0f}<br>Ach: {r_ach:.1f}%")
+
+                # 4. Create Custom Treemap with Beautiful Blue Theme
+                fig_tree = go.Figure(go.Treemap(
+                    ids=ids,
+                    labels=labels,
+                    parents=parents,
+                    values=values,
+                    text=texts,
+                    textinfo="text",
+                    textposition="middle center",
+                    customdata=hover_texts,
+                    hovertemplate="%{customdata}<extra></extra>",
+                    marker=dict(
+                        colors=colors,
+                        # 🚀 අලංකාර Blue Theme එක (ලා නිල් ඉඳන් තද නිල් දක්වා)
+                        colorscale=[[0, '#CAF0F8'], [0.3, '#90E0EF'], [0.7, '#0077B6'], [1.0, '#03045E']],
+                        showscale=True,
+                        colorbar=dict(title="Ach %", thickness=15),
+                        cmin=0,
+                        cmax=max(150, max(colors)) if len(colors) > 0 else 150,
+                        line=dict(color='white', width=1.5) # 🚀 කොටු වටේට ලස්සන සුදු පාට බෝඩරයක් 
+                    ),
+                    pathbar=dict(visible=True, textfont=dict(color="#03045E", size=22)),
+                    tiling=dict(packing="squarify", pad=2) # 🚀 කොටු අතර පොඩි ඉඩක් තැබීම
+                ))
+                
+                fig_tree = apply_plotly_layout(fig_tree, f"Hierarchy Performance ({start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')})")
+                
+                fig_tree.update_layout(
+                    height=850, # 🚀 ඉඩ මදි නිසා උස 850 දක්වා ගොඩක් වැඩි කළා
+                    margin=dict(t=90, l=10, r=10, b=20)
+                )
+                
+                st.plotly_chart(fig_tree, use_container_width=True, config=plotly_config)
+            else:
+                st.info("No sales or target data available for the selected date range.")
+        else:
+            st.info("Data not available for Treemap.")
 
 if __name__ == "__main__":
     show()

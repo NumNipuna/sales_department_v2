@@ -23,11 +23,11 @@ def authenticate(username, password):
 
 def get_allowed_pages(role):
     if role == "admin":
-        return ["Requrement", "dashboard","rep_target"]
+        return ["Requirement", "dashboard","rep_target"]
     if role in ["user1"]:
         return ["1sales_day_book","2Inventory","3Monthly_Forecast","4Working_days","5Rep_Target"]
     if role in ["user2","user3"]:
-        return [role]
+        return ["1DSR_Report","2Cash_Collection_and_Deposit","Reconciliation"]
     return []
 
 # ---------- Google Sheets Connection ----------
