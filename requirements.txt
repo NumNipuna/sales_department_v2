@@ -11,3 +11,4 @@ plotly
 matplotlib
 SQLAlchemy
 psycopg2-binary
+streamlit-aggrid
