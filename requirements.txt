@@ -1,3 +1,14 @@
-fastapi
+streamlit
+pandas
+numpy
 gspread
+gspread-dataframe
 oauth2client
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+plotly
+matplotlib
+SQLAlchemy
+psycopg2-binary
+streamlit-aggrid
